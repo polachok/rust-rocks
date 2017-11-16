@@ -1,0 +1,43 @@
+variables:
+  DEPLOY_IMAGE: $CI_REGISTRY_IMAGE:$CI_COMMIT_REF_NAME_$CI_BUILD_TAG
+  LATEST_IMAGE: $CI_REGISTRY_IMAGE:latest
+  BUILD_IMAGE: $CI_REGISTRY_IMAGE:build
+
+stages:
+  - build_image
+  - pages
+
+build_image:
+  stage: build_image
+  image: docker:17.10
+  tags:
+    - rust
+  before_script:
+    - date && docker login -u gitlab-ci-token -p $CI_BUILD_TOKEN $CI_REGISTRY
+  script:
+    - date && docker build --pull -t $BUILD_IMAGE -f Dockerfile.build .
+    - date && docker push $BUILD_IMAGE
+    - date && echo "Pushed $BUILD_IMAGE"
+
+pages:
+  image: $BUILD_IMAGE
+  stage: pages
+  only:
+    - tags
+  cache:
+      paths:
+        - target
+  tags:
+    - rust
+  before_script:
+    - date && rm -fr ~/.cargo/registry && ln -s /cache/registry ~/.cargo/registry && mkdir -p /cache/registry
+    - date && source ~/.cargo/env
+    - date && rustc --version
+  script:
+    - date && source ~/.cargo/env
+    - date && RUST_BACKTRACE=1 CARGO_INCREMENTAL=1 cargo doc --features="static-link" --no-deps
+    - date && mkdir public
+    - date && cp -R target/doc/* public
+  artifacts:
+    paths:
+    - public
